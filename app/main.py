@@ -50,16 +50,7 @@ if uploaded_file:
             container = st.empty()
             full_response = ""
             
-            # Stream response
             for partial in st.session_state.agent.run():
-                # Primitive streaming/status display
-                # If partial starts with "Code Output" or similar, maybe format it?
-                # For now just append to full response for the final block, 
-                # or update status.
-                
-                # We can handle intermediate steps better if agent yields structured events
-                # But our agent yields strings.
-                
                 if partial.startswith("Running code") or partial.startswith("Code Output"):
                    with st.status("Analyzing...", expanded=False):
                        st.markdown(f"```{partial}```")
@@ -67,19 +58,6 @@ if uploaded_file:
                     full_response = partial
                     container.markdown(full_response)
             
-            # Save assistant message
             st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-    # Render history (excluding the new one we just added?) 
-    # Actually streamlit reruns. We should render history at the top.
-    # Refactoring rendering logic:
-    
-    # Clear previous run display to avoid duplication? 
-    # Streamlit flows top to bottom. 
-    # We should render existing history first.
-    
-    # Logic fix:
-    # 1. Render history.
-    # 2. Handle input.
-    
-    # Let's adjust the file content in the next turn if needed, or do it right now.
+            st.session_state.messages.append({"role": "assistant", "content": full_response})

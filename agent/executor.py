@@ -20,13 +20,11 @@ SAFE_BUILTINS = {
     ]
 }
 
+
 def get_safe_globals() -> Dict[str, Any]:
-    # We can pre-import safe modules here if we want them available by default
-    # Or just allow them to be imported. For now, let's just restrict builtins.
     return {"__builtins__": SAFE_BUILTINS}
 
 def run_code_capture(code: str, initial_locals: Dict[str, Any] = None) -> ToolResult:
-    # 1. Static Analysis
     errors = validate_code(code)
     if errors:
         return ToolResult(
@@ -35,12 +33,9 @@ def run_code_capture(code: str, initial_locals: Dict[str, Any] = None) -> ToolRe
             locals={}
         )
 
-    # 2. Execution
     stdout = io.StringIO()
     locals_dict = initial_locals.copy() if initial_locals else {}
     
-    # Pre-populate safe globals with allowed imports if we want to be nice
-    # But for now, we rely on the user improving the code to import what they need (within safe list)
     safe_globals = get_safe_globals()
 
     try:

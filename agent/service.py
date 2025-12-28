@@ -53,12 +53,10 @@ class CSVAgent:
             for chunk in stream:
                 delta = chunk.choices[0].delta
                 
-                # Handle Content
                 if delta.content:
                     full_content += delta.content
                     yield full_content
 
-                # Handle Tool Calls
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
                         idx = tc.index
@@ -82,20 +80,10 @@ class CSVAgent:
 
             # Process Results
             if full_content:
-                # Text response
                 self.messages.append({"role": "assistant", "content": full_content})
-                # If we had content, we are likely done or asking for user input next
-                # But if there are also tool calls (rare in same message for some models, common for others), we handle them too.
-                # Usually it's either/or in standard OpenAI/Mistral tool use flow, 
-                # OR content comes before tool calls (Thinking).
 
             if current_tool_calls:
-                # Reconstruct tool calls list
                 tool_calls_list = [v for k, v in sorted(current_tool_calls.items())]
-                
-                # Append assistant message with tools
-                # Note: If we already appended content above, we might need to merge or append a separate message?
-                # OpenAI usually expects one message with both content and tool_calls if they happen together.
                 
                 msg_data = {
                     "role": "assistant",
@@ -103,9 +91,7 @@ class CSVAgent:
                     "tool_calls": tool_calls_list
                 }
                 
-                # If we already appended a message for content above, we should correct it to include the tool calls
                 if full_content:
-                    # Remove the partial content-only message and replace with full message
                     self.messages.pop()
                     
                 self.messages.append(msg_data)
@@ -145,10 +131,8 @@ class CSVAgent:
                                 "content": f"Error executing tool: {str(e)}"
                             })
             elif not full_content:
-                 # No content and no tool calls?
                  pass
             else:
-                 # Content only, already handled
                  return
         
         yield "Max steps reached without final answer."
