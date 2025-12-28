@@ -2,6 +2,8 @@
 
 A Streamlit application that allows users to upload CSV files and interact with the data using natural language.
 
+<img width="1801" height="892" alt="Screenshot from 2025-12-28 19-26-50" src="https://github.com/user-attachments/assets/e602ada8-5cc2-4a9f-a1fa-7076b0e9dae5" />
+
 ## Overview
 
 Chat with CSV leverages Large Language Models (LLMs) to enable natural language interaction with structured data. Users can upload a CSV file and ask questions in plain English. The system intelligently generates Python code to analyze the data, executes it in a secure sandbox, and returns the results or visualizations.
