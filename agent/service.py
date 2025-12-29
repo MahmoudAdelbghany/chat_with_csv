@@ -19,9 +19,10 @@ class CSVAgent:
     def add_message(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
 
-    def run(self) -> Generator[str, None, None]:
+    def run(self) -> Generator[Dict[str, Any], None, None]:
         """
         Runs the agent loop and yields partial responses or tool outputs.
+        Yields dict: {"type": "delta"|"status"|"error", "content": str}
         """
         steps = 0
         while steps < settings.MAX_STEPS:
@@ -29,7 +30,7 @@ class CSVAgent:
                 limiter.acquire()
             except RateLimitExceeded as e:
                 logger.warning("Rate limit exceeded")
-                yield f"Error: {str(e)}"
+                yield {"type": "error", "content": f"Error: {str(e)}"}
                 return
 
             try:
@@ -43,7 +44,7 @@ class CSVAgent:
                 )
             except Exception as e:
                 logger.error(f"LLM API Error: {e}", exc_info=True)
-                yield f"Error calling LLM: {str(e)}"
+                yield {"type": "error", "content": f"Error calling LLM: {str(e)}"}
                 return
 
             # Accumulators
@@ -55,7 +56,7 @@ class CSVAgent:
                 
                 if delta.content:
                     full_content += delta.content
-                    yield full_content
+                    yield {"type": "delta", "content": delta.content}
 
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
@@ -101,7 +102,7 @@ class CSVAgent:
                     args_str = tool_call_data["function"]["arguments"]
                     logger.info(f"Tool Call: {func_name} args={args_str}")
 
-                    yield f"Running code..."
+                    yield {"type": "status", "content": "Running code..."}
 
                     if func_name == "run_code_capture":
                         try:
@@ -118,9 +119,9 @@ class CSVAgent:
                             })
                             
                             if result.error:
-                                yield f"Code Error: {result.error}"
+                                yield {"type": "status", "content": f"Code Error: {result.error}"}
                             else:
-                                yield f"Code Output:\n{result.stdout}"
+                                yield {"type": "status", "content": f"Code Output:\n{result.stdout}"}
                                 
                         except Exception as e:
                             logger.error(f"Tool Execution Error: {e}", exc_info=True)
@@ -135,4 +136,4 @@ class CSVAgent:
             else:
                  return
         
-        yield "Max steps reached without final answer."
+        yield {"type": "status", "content": "Max steps reached without final answer."}

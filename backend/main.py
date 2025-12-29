@@ -1,0 +1,21 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from backend.api.endpoints import router as api_router
+from core.config import settings
+
+app = FastAPI(title="Chat with CSV API")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # In production, verify this
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router, prefix="/api")
+
+@app.get("/")
+async def root():
+    return {"message": "Chat with CSV API is running"}
