@@ -12,8 +12,8 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./core:/app/core
-    # Ensure backend reloads on code changes
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    # Production command without reload
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
 
   frontend:
     build:
@@ -28,4 +28,4 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://localhost:8000/api

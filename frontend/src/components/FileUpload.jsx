@@ -16,9 +16,9 @@ const FileUpload = ({ onUploadSuccess }) => {
     formData.append('file', file);
 
     try {
-        // In dev, we might need to point to localhost:8000 if proxy isn't set
-        // But let's assume we configure proxy or use full URL
-        const response = await axios.post('http://localhost:8000/api/upload', formData, {
+        // Use VITE_API_URL if set, otherwise default to /api (for proxy/production)
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
+        const response = await axios.post(`${API_URL}/upload`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },

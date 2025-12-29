@@ -8,7 +8,7 @@ app = FastAPI(title="Chat with CSV API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, verify this
+    allow_origins=["*"], # TODO: Lock this down to specific domains once authentication is implemented
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

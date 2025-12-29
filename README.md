@@ -1,8 +1,8 @@
 # Chat with CSV
 
-A Streamlit application that allows users to upload CSV files and interact with the data using natural language.
+A powerful application that allows users to upload CSV files and interact with the data using natural language, built with React and FastAPI.
 
-<img width="1801" height="892" alt="Screenshot from 2025-12-28 19-26-50" src="https://github.com/user-attachments/assets/e602ada8-5cc2-4a9f-a1fa-7076b0e9dae5" />
+<img width="1801" height="892" alt="Screenshot" src="https://github.com/user-attachments/assets/e602ada8-5cc2-4a9f-a1fa-7076b0e9dae5" />
 
 ## Overview
 
@@ -10,7 +10,8 @@ Chat with CSV leverages Large Language Models (LLMs) to enable natural language 
 
 ## Architecture
 
-- **Frontend**: Streamlit-based user interface for file upload and chat interaction.
+- **Frontend**: React application (Vite-based) for a responsive user interface.
+- **Backend**: FastAPI service for handling API requests and managing sessions.
 - **Agent Layer**: Utilizes OpenAI's GPT models to transform natural language into executable Python code.
 - **Execution Engine**: A sandboxed environment that parses, validates, and executes generated code using AST analysis to ensure safety.
 
@@ -19,12 +20,10 @@ Chat with CSV leverages Large Language Models (LLMs) to enable natural language 
 - Natural language querying of CSV data
 - Streaming responses with intermediate tool execution feedback
 - Secure sandbox for executing model-generated Python code
-- Static code analysis using AST
-- Restricted builtins and module allowlist
+- User-friendly React interface with markdown support
 - Rate limiting to control API usage
 - JSON structured logging
 - Dockerized deployment
-- Basic security-focused test coverage
 
 ## Security Model
 
@@ -35,12 +34,12 @@ Before execution:
 - Only a small allowlist of Python modules is permitted
 - Dangerous builtins such as open, exec, eval, and import hooks are blocked
 - Execution runs with restricted globals and sanitized locals
-- File system, OS, and subprocess access are disabled
 
 ## Prerequisites
 
 - Python 3.10+
-- Docker (optional)
+- Node.js 18+ (for local development)
+- Docker (optional but recommended)
 - OpenAI API Key
 
 ## Setup
@@ -53,22 +52,41 @@ Before execution:
 
 ## Running with Docker
 
-Build and run the container:
+Build and run the containers:
 
 ```bash
 docker-compose up --build
 ```
 
-Access the application at `http://localhost:8501`.
+Access the application at `http://localhost:5173`.
 
 ## Running Locally
+
+### Backend
 
 1. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-2. Run the application:
+2. Run the backend:
    ```bash
-   streamlit run app/main.py
+   uvicorn backend.main:app --reload
+   ```
+
+### Frontend
+
+1. Navigate to frontend directory:
+   ```bash
+   cd frontend
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Run the frontend:
+   ```bash
+   npm run dev
    ```
