@@ -1,7 +1,7 @@
 openai==2.14.0
 pandas==2.3.3
 python-dotenv==1.2.1
-streamlit==1.52.2
+
 pydantic-settings
 fastapi
 uvicorn
