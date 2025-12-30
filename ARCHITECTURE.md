@@ -23,7 +23,7 @@ Each layer is designed to be loosely coupled and stateless where possible.
 
 ```mermaid
 graph TD
-    User[Browser (React)] -->|HTTPS / Secure Cookies| API[FastAPI Backend]
+    User[Browser-React] -->|HTTPS / Secure Cookies| API[FastAPI Backend]
     API -->|Async Persistance| DB[(PostgreSQL)]
     API -->|File Access| FS[Filesystem]
     API -->|Prompt & Context| LLM[LLM Agent]
