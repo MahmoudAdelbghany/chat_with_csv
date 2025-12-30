@@ -2,13 +2,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.api.endpoints import router as api_router
 from core.config import settings
+import os
 
 app = FastAPI(title="Chat with CSV API")
 
 # Configure CORS
+origins = [
+    "http://localhost:5173",
+    "https://chat-with-csv-indol.vercel.app",
+]
+
+# Allow overriding/adding via environment variable
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # TODO: Lock this down to specific domains once authentication is implemented
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
