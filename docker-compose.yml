@@ -9,11 +9,28 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/chat_db
     volumes:
       - ./backend:/app/backend
       - ./core:/app/core
+      - ./uploads:/app/uploads
     # Production command without reload
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=chat_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
 
   frontend:
     build:
@@ -29,3 +46,7 @@ services:
       - backend
     environment:
       - VITE_API_URL=http://localhost:8000/api
+
+volumes:
+  postgres_data:
+

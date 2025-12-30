@@ -6,7 +6,41 @@ const ChatInterface = ({ sessionId, initialData }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [datasetInfo, setDatasetInfo] = useState(initialData || {}); // Fallback state
   const messagesEndRef = useRef(null);
+  const isFetched = useRef(false);
+
+  // Fetch history if initialData is missing (which happens when clicking sidebar)
+  useEffect(() => {
+    if (!initialData && !isFetched.current) {
+        const fetchHistory = async () => {
+           try {
+                const API_URL = import.meta.env.VITE_API_URL || '/api';
+                const response = await fetch(`${API_URL}/conversations/${sessionId}`);
+                if (!response.ok) throw new Error("Failed to load history");
+                
+                const data = await response.json();
+                
+                // Set messages
+                setMessages(data.messages);
+                
+                // Set dataset info basic (we don't get full preview from this endpoint yet, but maybe title)
+                setDatasetInfo({
+                    filename: data.title,
+                    columns: [], // TODO: We might want connected dataset details
+                    preview: null
+                });
+                
+           } catch (e) {
+               console.error("Error loading history", e);
+           }
+        };
+        fetchHistory();
+        isFetched.current = true;
+    } 
+    // If we have initialData (fresh upload), ensure we don't have empty state if we switch back and forth? 
+    // Actually using key={sessionId} in App.jsx handles mount reset.
+  }, [sessionId, initialData]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -98,26 +132,26 @@ const ChatInterface = ({ sessionId, initialData }) => {
     <div className="container" style={{display: 'flex', flexDirection: 'column', height: '100vh', paddingBottom: '2rem'}}>
         <div className="header" style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
            <h2 style={{fontSize: '1.5rem'}}>CSV Chat</h2>
-           <span style={{fontSize: '0.9rem', color: '#666'}}>{initialData.filename}</span>
+           <span style={{fontSize: '0.9rem', color: '#666'}}>{datasetInfo.filename}</span>
         </div>
 
         <div style={{flex: 1, overflowY: 'auto', marginBottom: '1rem', paddingRight: '0.5rem'}}>
-            {initialData.preview && (
+            {datasetInfo.preview && (
                 <div style={{marginBottom: '2rem'}}>
                     <h3>Data Preview</h3>
                     <div style={{overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '0.5rem', marginTop: '0.5rem'}}>
                          <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem'}}>
                              <thead>
                                  <tr style={{background: 'var(--secondary-bg)'}}>
-                                     {initialData.columns.map(col => (
+                                     {datasetInfo.columns?.map(col => (
                                          <th key={col} style={{padding: '0.5rem', textAlign: 'left', borderBottom: '1px solid var(--border-color)'}}>{col}</th>
                                      ))}
                                  </tr>
                              </thead>
                              <tbody>
-                                 {initialData.preview.map((row, idx) => (
+                                 {datasetInfo.preview.map((row, idx) => (
                                      <tr key={idx} style={{borderBottom: '1px solid #eee'}}>
-                                         {initialData.columns.map(col => (
+                                         {datasetInfo.columns.map(col => (
                                              <td key={`${idx}-${col}`} style={{padding: '0.5rem'}}>{row[col]}</td>
                                          ))}
                                      </tr>

@@ -14,6 +14,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from backend.core.database import init_db
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
+
 app.include_router(api_router, prefix="/api")
 
 @app.get("/")

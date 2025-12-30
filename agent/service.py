@@ -1,5 +1,6 @@
 import json
-from typing import List, Generator, Any, Dict
+import asyncio
+from typing import List, AsyncGenerator, Any, Dict
 
 from core.client import get_client
 from agent.executor import TOOLS, run_code_capture
@@ -19,7 +20,7 @@ class CSVAgent:
     def add_message(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
 
-    def run(self) -> Generator[Dict[str, Any], None, None]:
+    async def run(self) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Runs the agent loop and yields partial responses or tool outputs.
         Yields dict: {"type": "delta"|"status"|"error", "content": str}
@@ -27,7 +28,9 @@ class CSVAgent:
         steps = 0
         while steps < settings.MAX_STEPS:
             try:
-                limiter.acquire()
+                # synchronous limiter for now, or make it async if needed. 
+                # Assuming limiter.acquire() is fast enough or we leave it sync.
+                limiter.acquire() 
             except RateLimitExceeded as e:
                 logger.warning("Rate limit exceeded")
                 yield {"type": "error", "content": f"Error: {str(e)}"}
@@ -35,7 +38,7 @@ class CSVAgent:
 
             try:
                 logger.info(f"Calling LLM with {len(self.messages)} messages")
-                stream = self.client.chat.completions.create(
+                stream = await self.client.chat.completions.create(
                     model=settings.MODEL_NAME,
                     messages=self.messages,
                     tools=TOOLS,
@@ -51,7 +54,7 @@ class CSVAgent:
             full_content = ""
             current_tool_calls: Dict[int, Dict[str, Any]] = {}
 
-            for chunk in stream:
+            async for chunk in stream:
                 delta = chunk.choices[0].delta
                 
                 if delta.content:
@@ -107,7 +110,13 @@ class CSVAgent:
                     if func_name == "run_code_capture":
                         try:
                             args = json.loads(args_str)
-                            result: ToolResult = run_code_capture(args["code"], initial_locals=self.context)
+                            # Run code execution in a separate thread to avoid blocking loop
+                            # Since run_code_capture uses exec()
+                            result: ToolResult = await asyncio.to_thread(
+                                run_code_capture, 
+                                args["code"], 
+                                initial_locals=self.context
+                            )
                             
                             logger.debug(f"Tool Output: {result.stdout[:100]}...")
                             
