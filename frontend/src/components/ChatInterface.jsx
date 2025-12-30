@@ -16,7 +16,7 @@ const ChatInterface = ({ sessionId, initialData }) => {
         const fetchHistory = async () => {
            try {
                 const API_URL = import.meta.env.VITE_API_URL || '/api';
-                const response = await fetch(`${API_URL}/conversations/${sessionId}`);
+                const response = await fetch(`${API_URL}/conversations/${sessionId}`, { credentials: 'include' });
                 if (!response.ok) throw new Error("Failed to load history");
                 
                 const data = await response.json();
@@ -64,6 +64,7 @@ const ChatInterface = ({ sessionId, initialData }) => {
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify({ message: userMsg.content }),
         });
 

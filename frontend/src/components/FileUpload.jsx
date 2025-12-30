@@ -22,6 +22,7 @@ const FileUpload = ({ onUploadSuccess }) => {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
+            withCredentials: true,
         });
         
         onUploadSuccess(response.data);

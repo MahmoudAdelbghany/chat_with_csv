@@ -11,12 +11,13 @@ import pandas as pd
 import os
 
 class SessionManager:
-    async def create_conversation(self, dataset_id: int, title: str) -> str:
+    async def create_conversation(self, dataset_id: int, title: str, user_id: str) -> str:
         async for session in get_session():
             conversation = Conversation(
                 id=str(uuid.uuid4()),
                 title=title,
-                dataset_id=dataset_id
+                dataset_id=dataset_id,
+                user_id=user_id
             )
             session.add(conversation)
             await session.commit()
@@ -24,11 +25,11 @@ class SessionManager:
             return conversation.id
         return ""
 
-    async def get_agent(self, conversation_id: str) -> Optional[CSVAgent]:
+    async def get_agent(self, conversation_id: str, user_id: str) -> Optional[CSVAgent]:
         # This regenerates the agent stateless-ly from DB context
         async for session in get_session():
             # 1. Fetch Conversation and Dataset
-            stmt = select(Conversation).where(Conversation.id == conversation_id)
+            stmt = select(Conversation).where(Conversation.id == conversation_id, Conversation.user_id == user_id)
             result = await session.exec(stmt)
             conversation = result.first()
             if not conversation:
@@ -82,15 +83,15 @@ class SessionManager:
             session.add(message)
             await session.commit()
 
-    async def list_conversations(self):
+    async def list_conversations(self, user_id: str):
         async for session in get_session():
-            stmt = select(Conversation).order_by(Conversation.created_at.desc())
+            stmt = select(Conversation).where(Conversation.user_id == user_id).order_by(Conversation.created_at.desc())
             result = await session.exec(stmt)
             return result.all()
 
-    async def get_conversation_details(self, conversation_id: str):
+    async def get_conversation_details(self, conversation_id: str, user_id: str):
         async for session in get_session():
-            stmt = select(Conversation).where(Conversation.id == conversation_id)
+            stmt = select(Conversation).where(Conversation.id == conversation_id, Conversation.user_id == user_id)
             result = await session.exec(stmt)
             conversation = result.first()
             if not conversation:
@@ -104,7 +105,7 @@ class SessionManager:
             
             return conversation, messages
 
-    async def delete_conversation(self, conversation_id: str):
+    async def delete_conversation(self, conversation_id: str, user_id: str):
         async for session in get_session():
             # Delete messages first (cascade usually handles this but let's be explicit/safe)
             msg_stmt = select(Message).where(Message.conversation_id == conversation_id)
@@ -113,7 +114,7 @@ class SessionManager:
                 await session.delete(msg)
             
             # Delete conversation
-            stmt = select(Conversation).where(Conversation.id == conversation_id)
+            stmt = select(Conversation).where(Conversation.id == conversation_id, Conversation.user_id == user_id)
             result = await session.exec(stmt)
             conversation = result.first()
             if conversation:

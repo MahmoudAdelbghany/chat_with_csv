@@ -12,7 +12,7 @@ const Sidebar = ({ currentSessionId, onSelectSession, onNewChat }) => {
   const fetchConversations = async () => {
     try {
         const API_URL = import.meta.env.VITE_API_URL || '/api';
-        const response = await axios.get(`${API_URL}/conversations`);
+        const response = await axios.get(`${API_URL}/conversations`, { withCredentials: true });
         setConversations(response.data);
     } catch (error) {
         console.error("Failed to load conversations", error);
@@ -104,7 +104,7 @@ const Sidebar = ({ currentSessionId, onSelectSession, onNewChat }) => {
                             if (window.confirm('Delete this chat?')) {
                                 try {
                                     const API_URL = import.meta.env.VITE_API_URL || '/api';
-                                    await axios.delete(`${API_URL}/conversations/${conv.id}`);
+                                    await axios.delete(`${API_URL}/conversations/${conv.id}`, { withCredentials: true });
                                     // Refresh list
                                     fetchConversations();
                                     // If deleted current session, start new chat
