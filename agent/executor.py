@@ -11,7 +11,7 @@ from agent.sanitize import sanitize_locals
 SAFE_BUILTINS = {
     name: getattr(builtins, name)
     for name in [
-        "abs", "all", "any", "ascii", "bin", "bool", "bytearray", "bytes", "callable",
+        "__import__", "abs", "all", "any", "ascii", "bin", "bool", "bytearray", "bytes", "callable",
         "chr", "complex", "dict", "divmod", "enumerate", "filter", "float", "format",
         "frozenset", "getattr", "hasattr", "hash", "help", "hex", "id", "int", "isinstance",
         "issubclass", "iter", "len", "list", "map", "max", "min", "next", "object", "oct",
