@@ -13,6 +13,7 @@ async def get_user_id(request: Request, response: Response) -> str:
             value=user_id, 
             httponly=True, 
             max_age=31536000, 
-            samesite="lax" 
+            samesite="none",
+            secure=True,
         )
     return user_id
