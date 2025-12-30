@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 import { Send, User, Bot } from 'lucide-react';
 
 const ChatInterface = ({ sessionId, initialData }) => {
@@ -170,7 +171,7 @@ const ChatInterface = ({ sessionId, initialData }) => {
                             {msg.role === 'user' ? <User size={18}/> : <Bot size={18}/>}
                         </div>
                         <div style={{flex: 1, overflowWrap: 'anywhere', minWidth: 0}}>
-                             <ReactMarkdown>{msg.content}</ReactMarkdown>
+                             <ReactMarkdown rehypePlugins={[rehypeRaw]}>{msg.content}</ReactMarkdown>
                         </div>
                     </div>
                 </div>

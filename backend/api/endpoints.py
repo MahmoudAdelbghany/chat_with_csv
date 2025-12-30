@@ -93,9 +93,15 @@ async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get
                 if part["type"] == "delta":
                     full_response += part["content"]
                 elif part["type"] == "status":
-                    # We could save status updates too if we wanted detailed logs, 
-                    # but for now let's just save the final assistant text.
-                    pass
+                    pass 
+                elif part["type"] == "tool_code":
+                    code_html = f"\n<details><summary>Executing Code</summary>\n\n```python\n{part['content']}\n```\n"
+                    full_response += code_html
+                    yield json.dumps({"type": "delta", "content": code_html}) + "\n"
+                elif part["type"] == "tool_output":
+                    output_html = f"\n**Output:**\n\n```\n{part['content']}\n```\n\n</details>\n"
+                    full_response += output_html
+                    yield json.dumps({"type": "delta", "content": output_html}) + "\n"
             
             # Save assistant response
             if full_response:

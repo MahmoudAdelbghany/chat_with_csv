@@ -105,16 +105,22 @@ class CSVAgent:
                     args_str = tool_call_data["function"]["arguments"]
                     logger.info(f"Tool Call: {func_name} args={args_str}")
 
-                    yield {"type": "status", "content": "Running code..."}
+                    # yield {"type": "status", "content": "Running code..."} 
+
 
                     if func_name == "run_code_capture":
                         try:
                             args = json.loads(args_str)
+                            code_to_run = args.get("code", "")
+                            
+                            # Yield code first
+                            yield {"type": "tool_code", "content": code_to_run}
+
                             # Run code execution in a separate thread to avoid blocking loop
                             # Since run_code_capture uses exec()
                             result: ToolResult = await asyncio.to_thread(
                                 run_code_capture, 
-                                args["code"], 
+                                code_to_run, 
                                 initial_locals=self.context
                             )
                             
@@ -128,9 +134,9 @@ class CSVAgent:
                             })
                             
                             if result.error:
-                                yield {"type": "status", "content": f"Code Error: {result.error}"}
+                                yield {"type": "tool_output", "content": f"Error: {result.error}"}
                             else:
-                                yield {"type": "status", "content": f"Code Output:\n{result.stdout}"}
+                                yield {"type": "tool_output", "content": result.stdout}
                                 
                         except Exception as e:
                             logger.error(f"Tool Execution Error: {e}", exc_info=True)
@@ -140,6 +146,7 @@ class CSVAgent:
                                 "name": func_name,
                                 "content": f"Error executing tool: {str(e)}"
                             })
+                            yield {"type": "tool_output", "content": f"System Error: {str(e)}"}
             elif not full_content:
                  pass
             else:
