@@ -130,13 +130,13 @@ const ChatInterface = ({ sessionId, initialData }) => {
   };
 
   return (
-    <div className="container" style={{display: 'flex', flexDirection: 'column', height: '100vh', paddingBottom: '2rem'}}>
-        <div className="header" style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-           <h2 style={{fontSize: '1.5rem'}}>CSV Chat</h2>
-           <span style={{fontSize: '0.9rem', color: '#666'}}>{datasetInfo.filename}</span>
+    <div className="chat-container">
+        <div className="chat-header">
+           <h2 style={{fontSize: '1.5rem', margin: 0}}>CSV Chat</h2>
+           <span style={{fontSize: '0.9rem', color: '#666', maxWidth: '50%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{datasetInfo.filename}</span>
         </div>
 
-        <div style={{flex: 1, overflowY: 'auto', marginBottom: '1rem', paddingRight: '0.5rem'}}>
+        <div className="chat-messages">
             {datasetInfo.preview && (
                 <div style={{marginBottom: '2rem'}}>
                     <h3>Data Preview</h3>
@@ -169,7 +169,7 @@ const ChatInterface = ({ sessionId, initialData }) => {
                         <div className="message-icon" style={{background: msg.role === 'user' ? '#ddd' : '#ff4b4b', color: msg.role === 'user' ? '#333' : 'white'}}>
                             {msg.role === 'user' ? <User size={18}/> : <Bot size={18}/>}
                         </div>
-                        <div style={{flex: 1, overflowWrap: 'anywhere'}}>
+                        <div style={{flex: 1, overflowWrap: 'anywhere', minWidth: 0}}>
                              <ReactMarkdown>{msg.content}</ReactMarkdown>
                         </div>
                     </div>
@@ -178,7 +178,7 @@ const ChatInterface = ({ sessionId, initialData }) => {
              <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={sendMessage} className="input-group">
+        <form onSubmit={sendMessage} className="input-group" style={{marginTop: 'auto'}}>
             <input 
                 type="text" 
                 className="input-field" 
