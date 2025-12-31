@@ -14,6 +14,7 @@ from backend.core.session import session_manager
 from backend.core.database import get_session
 from backend.models import Dataset
 from backend.core.auth import get_user_id
+from backend.core.storage import storage
 from fastapi import Depends
 from data.dataframe import load_csv
 
@@ -22,8 +23,7 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     message: str
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# UPLOAD_DIR is handled by storage service now
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_user_id)):
@@ -31,20 +31,19 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_u
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
     
     try:
-        # Generate unique filename
+        # Generate unique filename for storage key
         file_ext = file.filename.split('.')[-1]
         unique_filename = f"{uuid.uuid4()}.{file_ext}"
-        file_path = os.path.join(UPLOAD_DIR, unique_filename)
         
-        # Save file to disk
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
+        # Save file to storage (S3 or local)
+        # Returns the path/key stored
+        stored_path = storage.upload_file(file.file, unique_filename)
+        
         # Create Dataset record in DB
         async for session in get_session():
             dataset = Dataset(
                 filename=file.filename,
-                file_path=file_path,
+                file_path=stored_path, # S3 key or local path
                 uploaded_at=datetime.utcnow(),
                 user_id=user_id
             )
@@ -52,20 +51,36 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_u
             await session.commit()
             await session.refresh(dataset)
             dataset_id = dataset.id
-            break # Expecting single session yield
-
-        # Load dataframe for preview (and validation)
-        df = pd.read_csv(file_path)
-        cols = df.columns.tolist()
+            break
         
-        # Create session (Conversation)
+        # Load preview. For cloud storage, we might need to download it back or read bytes before upload
+        # But we already uploaded. Let's download to a temp buffer or just read the uploaded file if local
+        # Optimization: We could have read into memory before upload, but for huge files that's bad.
+        # Let's download it to a temp file for preview.
+        # Actually, for preview we just need head.
+        # To avoid re-downloading immediately, maybe we can read the file object before upload?
+        # But upload_file consumes it. 
+        # Let's just download it to a temp location for the preview generation.
+        
+        temp_preview_path = f"/tmp/{unique_filename}"
+        storage.download_file(stored_path, temp_preview_path)
+        
+        df = pd.read_csv(temp_preview_path)
+        cols = df.columns.tolist()
+        preview_data = df.head().to_dict(orient='records')
+        
+        # Clean up temp file
+        if os.path.exists(temp_preview_path):
+            os.remove(temp_preview_path)
+        
+        # Create session
         session_id = await session_manager.create_conversation(dataset_id=dataset_id, title=file.filename, user_id=user_id)
         
         return JSONResponse({
             "sessionId": session_id,
             "filename": file.filename,
             "columns": cols,
-            "preview": df.head().to_dict(orient='records')
+            "preview": preview_data
         })
         
     except Exception as e:
@@ -73,7 +88,16 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_u
 
 @router.post("/chat/{session_id}")
 async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get_user_id)):
-    agent = await session_manager.get_agent(session_id, user_id)
+    try:
+        agent = await session_manager.get_agent(session_id, user_id)
+    except FileNotFoundError:
+        # This handles the case where S3 or local file is missing
+        # We use a 410 Gone to indicate resource is missing permanently
+        raise HTTPException(status_code=410, detail="The dataset file for this conversation is missing. It may have been deleted due to inactivity or server restart.")
+    except Exception as e:
+        # Other errors during agent init
+         raise HTTPException(status_code=500, detail=f"Failed to initialize chat: {str(e)}")
+
     if not agent:
         raise HTTPException(status_code=404, detail="Session not found")
     

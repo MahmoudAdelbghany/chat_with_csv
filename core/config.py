@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     RATE_LIMIT_CALLS: int = 10
     RATE_LIMIT_PERIOD: int = 60
     
+    # Storage
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_BUCKET_NAME: Optional[str] = None
+    AWS_ENDPOINT_URL: Optional[str] = None
+    
     class Config:
         env_file = ".env"
 

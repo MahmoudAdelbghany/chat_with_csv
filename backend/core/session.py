@@ -46,14 +46,27 @@ class SessionManager:
             if not dataset:
                 return None
 
-            # 2. Load DataFrame (from disk)
-            # We need to reconstruct the file path.
-            # Assuming file_path is stored in Dataset
+            # 2. Load DataFrame (from storage)
+            # Fetch file from S3/Storage to local temp
+            from backend.core.storage import storage
+            
+            # We must use a unique temp path per dataset to avoid collisions but also maybe reuse if exists?
+            # For simplicity and statelessness (Railway), always download.
+            # Use /tmp for ephemeral storage
+            import os
+            
+            # Extract filename from path or just use dataset ID
+            temp_filename = f"dataset_{dataset.id}.csv"
+            temp_path = os.path.join("/tmp", temp_filename)
+            
+            # Download file (if it doesn't verify existence, this raises FileNotFoundError which we catch in endpoint)
+            storage.download_file(dataset.file_path, temp_path)
+            
             try:
-                df = pd.read_csv(dataset.file_path)
+                df = pd.read_csv(temp_path)
                 cols = df.columns.tolist()
-            except FileNotFoundError:
-                # Fallback or error
+            except Exception as e:
+                # If CSV is corrupt or some other error
                 return None
 
             # 3. Fetch recent messages

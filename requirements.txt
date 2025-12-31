@@ -6,6 +6,7 @@ pydantic-settings
 fastapi
 uvicorn
 python-multipart
+boto3
 # Database
 sqlmodel
 asyncpg
