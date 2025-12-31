@@ -59,8 +59,14 @@ class SessionManager:
             temp_filename = f"dataset_{dataset.id}.csv"
             temp_path = os.path.join("/tmp", temp_filename)
             
-            # Download file (if it doesn't verify existence, this raises FileNotFoundError which we catch in endpoint)
-            storage.download_file(dataset.file_path, temp_path)
+            # Download file only if it doesn't exist locally
+            if not os.path.exists(temp_path):
+                from core.logger import logger
+                logger.info(f"Downloading dataset {dataset.id} to {temp_path}")
+                storage.download_file(dataset.file_path, temp_path)
+            else:
+                from core.logger import logger
+                logger.info(f"Dataset {dataset.id} found in cache at {temp_path}")
             
             try:
                 df = pd.read_csv(temp_path)
