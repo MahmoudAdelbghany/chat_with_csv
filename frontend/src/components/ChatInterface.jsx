@@ -9,9 +9,34 @@ const CustomImg = ({node, ...props}) => (
 
 const CustomDiv = ({node, ...props}) => {
     if (props.className === 'interactive-plot' && props['data-src']) {
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
+        let src = props['data-src'];
+        
+        // Prepend API_URL if src is relative
+        if (src && !src.startsWith('http')) {
+             if (src.startsWith('/')) {
+                 // Check if API_URL has /api suffix and src starts with it?
+                 // No, API_URL usually is http://host or http://host/api
+                 // src usually is /api/files/...
+                 // If API_URL is /api (proxy), then we might get double api if src is /api/files
+                 
+                 if (API_URL.startsWith('http')) {
+                      const baseUrl = API_URL.endsWith('/api') ? API_URL.slice(0, -4) : API_URL;
+                      src = `${baseUrl}${src}`;
+                 } else {
+                     // Local dev with proxy or relative path
+                     // If API_URL is just '/api', and src is '/api/files', just leave it?
+                     // If src is '/api/files', we assume it's absolute path from root.
+                     // But if we are on a different domain?
+                     // Wait, if API_URL is http://... we MUST prepend.
+                     // If API_URL is relative (e.g. /api), then src /api/files... is fine relative to current origin.
+                 }
+            }
+        }
+
         return (
             <iframe 
-                src={props['data-src']} 
+                src={src} 
                 style={{width: '100%', height: '600px', borderRadius: '8px', marginTop: '10px', background: 'white', border: '1px solid #ddd'}} 
                 title="Interactive Plot"
             />

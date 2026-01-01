@@ -24,5 +24,11 @@ class TestSandboxing(unittest.TestCase):
         self.assertIsNotNone(result.error)
         self.assertIn("Call to 'open' is not allowed", result.error)
 
+    def test_safe_json_import(self):
+        code = "import json\nprint(json.dumps({'a': 1}))"
+        result = run_code_capture(code)
+        self.assertIsNone(result.error)
+        self.assertIn('{"a": 1}', result.stdout)
+
 if __name__ == '__main__':
     unittest.main()

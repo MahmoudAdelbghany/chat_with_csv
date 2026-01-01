@@ -1,7 +1,7 @@
 
 import ast
 
-SAFE_MODULES = {"math", "datetime", "pandas", "numpy", "matplotlib", "plotly", "seaborn", "ydata_profiling", "scipy"}
+SAFE_MODULES = {"math", "datetime", "pandas", "numpy", "matplotlib", "plotly", "seaborn", "ydata_profiling", "scipy", "json"}
 UNSAFE_BUILTINS = {
     "__import__", "open", "exec", "eval", "compile", 
     "globals", "locals", "super", "input", "exit", "quit"
