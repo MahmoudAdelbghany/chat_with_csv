@@ -21,3 +21,4 @@ class ToolResult(BaseModel):
     stdout: str
     error: Optional[str] = None
     locals: Dict[str, str]
+    artifacts: List[str] = Field(default_factory=list)

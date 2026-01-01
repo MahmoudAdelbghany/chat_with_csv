@@ -24,17 +24,33 @@ SAFE_BUILTINS = {
 def get_safe_globals() -> Dict[str, Any]:
     return {"__builtins__": SAFE_BUILTINS}
 
+import os
+import tempfile
+import glob
+
+# Configure Matplotlib backend to Agg to prevent GUI errors
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+except ImportError:
+    pass
+
 def run_code_capture(code: str, initial_locals: Dict[str, Any] = None) -> ToolResult:
     errors = validate_code(code)
     if errors:
         return ToolResult(
             stdout="",
             error=f"Security Violations:\n" + "\n".join(errors),
-            locals={}
+            locals={},
+            artifacts=[]
         )
 
     stdout = io.StringIO()
     locals_dict = initial_locals.copy() if initial_locals else {}
+    
+    # Create a temporary directory for artifacts
+    artifact_dir = tempfile.mkdtemp(prefix="agent_artifacts_")
+    locals_dict["output_dir"] = artifact_dir
     
     safe_globals = get_safe_globals()
 
@@ -42,16 +58,26 @@ def run_code_capture(code: str, initial_locals: Dict[str, Any] = None) -> ToolRe
         with contextlib.redirect_stdout(stdout):
             exec(code, safe_globals, locals_dict)
         
+        # Scan for artifacts
+        artifacts = []
+        if os.path.exists(artifact_dir):
+            for file_path in glob.glob(os.path.join(artifact_dir, "*")):
+                if os.path.isfile(file_path):
+                    artifacts.append(file_path)
+        
+        # Sanitize locals might remove output_dir, but that's fine
         return ToolResult(
             stdout=stdout.getvalue(),
             error=None,
-            locals=sanitize_locals(locals_dict)
+            locals=sanitize_locals(locals_dict),
+            artifacts=artifacts
         )
     except Exception as e:
         return ToolResult(
             stdout=stdout.getvalue(),
             error=str(e),
-            locals={}
+            locals={},
+            artifacts=[]
         )
 
 

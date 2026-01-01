@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import pandas as pd
@@ -95,8 +95,9 @@ async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get
         # We use a 410 Gone to indicate resource is missing permanently
         raise HTTPException(status_code=410, detail="The dataset file for this conversation is missing. It may have been deleted due to inactivity or server restart.")
     except Exception as e:
-        # Other errors during agent init
-         raise HTTPException(status_code=500, detail=f"Failed to initialize chat: {str(e)}")
+        from core.logger import logger
+        logger.error(f"Failed to initialize chat: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to initialize chat: {str(e)}")
 
     if not agent:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -119,9 +120,18 @@ async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get
                 elif part["type"] == "status":
                     pass 
                 elif part["type"] == "tool_code":
+                    # We want the tool code to be in a details block
                     code_html = f"\n<details><summary>Executing Code</summary>\n\n```python\n{part['content']}\n```\n"
                     full_response += code_html
                     yield json.dumps({"type": "delta", "content": code_html}) + "\n"
+                elif part["type"] == "artifact":
+                    # Close the code execution details to show artifact prominently
+                    # We used to close details here.
+                    # Important: Artifact content might contain HTML (iframe).
+                    # We must ensure we are closing the PREVIOUS details block (Executing Code).
+                    artifact_html = f"\n</details>\n\n{part['content']}\n\n<details><summary>Execution Output</summary>\n"
+                    full_response += artifact_html
+                    yield json.dumps({"type": "delta", "content": artifact_html}) + "\n"
                 elif part["type"] == "tool_output":
                     output_html = f"\n**Output:**\n\n```\n{part['content']}\n```\n\n</details>\n"
                     full_response += output_html
@@ -178,3 +188,33 @@ async def get_conversation(session_id: str, user_id: str = Depends(get_user_id))
 async def delete_conversation(session_id: str, user_id: str = Depends(get_user_id)):
     await session_manager.delete_conversation(session_id, user_id)
     return {"status": "success", "message": "Conversation deleted"}
+
+@router.get("/files/{filename}")
+async def get_file(filename: str, user_id: str = Depends(get_user_id)):
+    """
+    Serve files (plots, reports) from storage.
+    """
+    try:
+        # Create a temp location
+        temp_path = f"/tmp/{filename}"
+        # If running locally, storage might just point to a path, but let's re-use download interface for abstraction
+        # Ideally storage should have a get_file_stream or presigned url method.
+        # For now, download to temp and stream.
+        
+        # Security check: prevent directory traversal
+        if ".." in filename or "/" in filename:
+             raise HTTPException(status_code=400, detail="Invalid filename")
+             
+        storage.download_file(filename, temp_path)
+        
+        # Determine media type
+        media_type = "application/octet-stream"
+        if filename.endswith(".png"): media_type = "image/png"
+        elif filename.endswith(".html"): media_type = "text/html"
+        elif filename.endswith(".json"): media_type = "application/json"
+        
+        return FileResponse(temp_path, media_type=media_type, filename=filename, content_disposition_type="inline")
+        
+    except Exception as e:
+        # If file not found
+        raise HTTPException(status_code=404, detail="File not found")

@@ -11,3 +11,8 @@ boto3
 sqlmodel
 asyncpg
 greenlet
+matplotlib
+plotly
+ydata-profiling
+seaborn
+scipy

@@ -3,6 +3,28 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { Send, User, Bot } from 'lucide-react';
 
+const CustomImg = ({node, ...props}) => (
+    <img {...props} style={{maxWidth: '100%', borderRadius: '8px', marginTop: '10px'}} crossOrigin="anonymous" alt={props.alt || "Generated Image"} />
+);
+
+const CustomDiv = ({node, ...props}) => {
+    if (props.className === 'interactive-plot' && props['data-src']) {
+        return (
+            <iframe 
+                src={props['data-src']} 
+                style={{width: '100%', height: '600px', borderRadius: '8px', marginTop: '10px', background: 'white', border: '1px solid #ddd'}} 
+                title="Interactive Plot"
+            />
+        );
+    }
+    return <div {...props} />;
+};
+
+const markdownComponents = {
+    img: CustomImg,
+    div: CustomDiv
+};
+
 const ChatInterface = ({ sessionId, initialData }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -171,7 +193,12 @@ const ChatInterface = ({ sessionId, initialData }) => {
                             {msg.role === 'user' ? <User size={18}/> : <Bot size={18}/>}
                         </div>
                         <div style={{flex: 1, overflowWrap: 'anywhere', minWidth: 0}}>
-                             <ReactMarkdown rehypePlugins={[rehypeRaw]}>{msg.content}</ReactMarkdown>
+                             <ReactMarkdown 
+                                 rehypePlugins={[rehypeRaw]}
+                                 components={markdownComponents}
+                             >
+                                 {msg.content}
+                             </ReactMarkdown>
                         </div>
                     </div>
                 </div>
