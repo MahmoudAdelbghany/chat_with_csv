@@ -25,6 +25,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Create uploads directory if it doesn't exist
+os.makedirs("uploads", exist_ok=True)
+
+# Mount uploads directory to serve static files (reports, etc.)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 from backend.core.database import init_db
 
 @app.on_event("startup")

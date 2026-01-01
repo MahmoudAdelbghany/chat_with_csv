@@ -22,7 +22,29 @@ const CustomDiv = ({node, ...props}) => {
 
 const markdownComponents = {
     img: CustomImg,
-    div: CustomDiv
+    div: CustomDiv,
+    a: ({node, ...props}) => {
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
+        let href = props.href;
+        
+        if (href && !href.startsWith('http') && !href.startsWith('#')) {
+             if (href.startsWith('/api/files/')) {
+                 // Handle agent-generated paths like /api/files/...
+                 if (API_URL.startsWith('http')) {
+                      // Avoid double /api if API_URL includes it
+                      const baseUrl = API_URL.endsWith('/api') ? API_URL.slice(0, -4) : API_URL;
+                      // Remove leading slash from href to ensure clean join? 
+                      // Actually baseUrl + href (which starts with /) is fine e.g. domain.com + /api/files
+                      // Just need to ensure no double slash if baseUrl ends with / (it shouldn't if strict)
+                      // But API_URL usually doesn't end with slash.
+                      href = `${baseUrl}${href}`;
+                 }
+             } else if (!href.startsWith('/')) {
+                 href = `${API_URL}/${href}`;
+             }
+        }
+        return <a {...props} href={href} target="_blank" rel="noopener noreferrer" />;
+    }
 };
 
 const ChatInterface = ({ sessionId, initialData }) => {
