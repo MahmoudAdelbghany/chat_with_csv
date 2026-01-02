@@ -54,31 +54,27 @@ def run_code_capture(code: str, initial_locals: Dict[str, Any] = None) -> ToolRe
     
     safe_globals = get_safe_globals()
 
+    error_message = None
     try:
         with contextlib.redirect_stdout(stdout):
             exec(code, safe_globals, locals_dict)
-        
-        # Scan for artifacts
-        artifacts = []
-        if os.path.exists(artifact_dir):
-            for file_path in glob.glob(os.path.join(artifact_dir, "*")):
-                if os.path.isfile(file_path):
-                    artifacts.append(file_path)
-        
-        # Sanitize locals might remove output_dir, but that's fine
-        return ToolResult(
-            stdout=stdout.getvalue(),
-            error=None,
-            locals=sanitize_locals(locals_dict),
-            artifacts=artifacts
-        )
     except Exception as e:
-        return ToolResult(
-            stdout=stdout.getvalue(),
-            error=str(e),
-            locals={},
-            artifacts=[]
-        )
+        error_message = str(e)
+    
+    # Scan for artifacts
+    artifacts = []
+    if os.path.exists(artifact_dir):
+        for file_path in glob.glob(os.path.join(artifact_dir, "*")):
+            if os.path.isfile(file_path):
+                artifacts.append(file_path)
+    
+    # Sanitize locals might remove output_dir, but that's fine
+    return ToolResult(
+        stdout=stdout.getvalue(),
+        error=error_message,
+        locals=sanitize_locals(locals_dict),
+        artifacts=artifacts
+    )
 
 
 TOOLS = [

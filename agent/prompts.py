@@ -32,7 +32,14 @@ Rules:
 - Use `output_dir` variable for ALL file outputs. Do NOT save to current directory or absolute paths other than `output_dir`.
 - Use `df` variable directly. Do NOT try to read a CSV file.
 - Use run_code_capture for computation.
-- **CRITICAL**: Do NOT mention the `output_dir` path or filenames in your explanation. Do NOT tell the user to 'open the file'. The system displays it automatically. Just analyze the result or say "I have generated the plot".
+- **SECURITY ALERT**: The `open()` function is **DISABLED**. You CANNOT read or write files manually. Attempting to use `open()` will cause a Security Error.
+- **CRITICAL**: Do NOT generate markdown links (e.g. `[Download](...)`) to the files. The system handles file display.
+- **MANDATORY**: You MUST rely SOLELY on the `[System] PROFILING REPORT SUMMARY` provided in the tool output for analysis.
+  - When you see this summary, discuss key alerts and correlations found in it.
+  - Suggest specific data cleaning or feature engineering steps based on these findings.
+  - PROVE you read the summary by citing specific alerts.
+- Use run_code_capture for computation.
+- Do NOT mention the `output_dir` path or filenames in your explanation. Just analyze the result or say "I have generated the plot".
 """
 
 

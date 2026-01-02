@@ -129,12 +129,7 @@ class CSVAgent:
                             
                             logger.debug(f"Tool Output: {result.stdout[:100]}...")
                             
-                            self.messages.append({
-                                "role": "tool",
-                                "tool_call_id": tool_call_data["id"],
-                                "name": "run_code_capture",
-                                "content": json.dumps(result.model_dump())
-                            })
+                            # Message append deferred until after artifact processing to include summaries
                             
                             if result.error:
                                 yield {"type": "tool_output", "content": f"Error: {result.error}"}
@@ -240,6 +235,13 @@ class CSVAgent:
                                                     result.stdout += f"\n\n[System] PROFILING REPORT SUMMARY:\n{summary_text}\n"
                                             except Exception as e:
                                                 logger.error(f"Failed to read JSON artifact: {e}")
+
+                                self.messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tool_call_data["id"],
+                                    "name": "run_code_capture",
+                                    "content": json.dumps(result.model_dump())
+                                })
 
                                 yield {"type": "tool_output", "content": result.stdout + artifact_msg}
                                 
