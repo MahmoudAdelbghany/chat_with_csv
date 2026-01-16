@@ -19,6 +19,8 @@ const CustomImg = ({node, ...props}) => {
 };
 
 const CustomDiv = ({node, ...props}) => {
+    const [isLoading, setIsLoading] = React.useState(true);
+    
     if (props.className === 'interactive-plot' && props['data-src']) {
         const API_URL = import.meta.env.VITE_API_URL || '';
         let src = props['data-src'];
@@ -31,11 +33,56 @@ const CustomDiv = ({node, ...props}) => {
         }
 
         return (
-            <iframe 
-                src={src} 
-                style={{width: '100%', height: '600px', borderRadius: '8px', marginTop: '10px', background: 'white', border: '1px solid #ddd'}} 
-                title="Interactive Plot"
-            />
+            <div style={{position: 'relative', width: '100%', height: '600px', marginTop: '10px'}}>
+                {isLoading && (
+                    <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#f8f9fa',
+                        borderRadius: '8px',
+                        border: '1px solid #ddd',
+                        color: '#666',
+                        gap: '12px'
+                    }}>
+                        <div style={{
+                            width: '40px',
+                            height: '40px',
+                            border: '3px solid #e0e0e0',
+                            borderTop: '3px solid #ff4b4b',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite'
+                        }} />
+                        <span style={{fontSize: '14px'}}>Loading interactive report...</span>
+                        <style>{`
+                            @keyframes spin {
+                                0% { transform: rotate(0deg); }
+                                100% { transform: rotate(360deg); }
+                            }
+                        `}</style>
+                    </div>
+                )}
+                <iframe 
+                    src={src} 
+                    style={{
+                        width: '100%', 
+                        height: '100%', 
+                        borderRadius: '8px', 
+                        background: 'white', 
+                        border: '1px solid #ddd',
+                        opacity: isLoading ? 0 : 1,
+                        transition: 'opacity 0.3s ease'
+                    }} 
+                    title="Interactive Plot"
+                    onLoad={() => setIsLoading(false)}
+                />
+            </div>
         );
     }
     return <div {...props} />;
@@ -157,9 +204,6 @@ const ChatInterface = ({ sessionId, initialData }) => {
                     const data = JSON.parse(line);
                     
                     if (data.type === 'delta') {
-                        assistantMsg.content += data.content;
-                    } else if (data.type === 'artifact') {
-                        // Append artifact HTML (images, interactive plots, etc.)
                         assistantMsg.content += data.content;
                     } else if (data.type === 'status' || data.type === 'error') {
                         if (data.content.startsWith("Code Output")) {

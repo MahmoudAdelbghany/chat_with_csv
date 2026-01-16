@@ -185,7 +185,8 @@ class CSVAgent:
                                             artifact_msg += f"\n[Generated File: {filename}]"
                                             
                                     except Exception as e:
-                                        logger.error(f"Failed to process artifact {artifact_path}: {e}")
+                                        logger.error(f"Failed to process artifact {artifact_path}: {e}", exc_info=True)
+                                        artifact_msg += f"\n[Error processing {filename}: {str(e)}]"
                                 
                                 # Cleanup temp artifact files after upload
                                 for path in artifacts_to_cleanup:

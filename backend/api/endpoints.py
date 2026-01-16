@@ -135,9 +135,11 @@ async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get
         full_response = ""
         try:
             async for part in agent.run():
-                # Yield each part as a JSON line
-                json_part = json.dumps(part)
-                yield json_part + "\n"
+                # DON'T yield raw artifact events - they're processed and sent as delta below
+                # This prevents duplicate content in the frontend
+                if part["type"] != "artifact":
+                    json_part = json.dumps(part)
+                    yield json_part + "\n"
                 
                 # Accumulate actual response content for saving
                 if part["type"] == "delta":
@@ -151,9 +153,7 @@ async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get
                     yield json.dumps({"type": "delta", "content": code_html}) + "\n"
                 elif part["type"] == "artifact":
                     # Close the code execution details to show artifact prominently
-                    # We used to close details here.
                     # Important: Artifact content might contain HTML (iframe).
-                    # We must ensure we are closing the PREVIOUS details block (Executing Code).
                     from core.logger import logger
                     logger.info(f"[ARTIFACT LIFECYCLE] Endpoint received artifact event: type={part['type']}")
                     logger.info(f"[ARTIFACT LIFECYCLE] Artifact content (first 300 chars): {part['content'][:300] if part['content'] else 'EMPTY'}")
