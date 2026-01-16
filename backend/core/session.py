@@ -69,9 +69,26 @@ class SessionManager:
                 logger.info(f"Dataset {dataset.id} found in cache at {temp_path}")
             
             try:
-                df = pd.read_csv(temp_path)
+                # Try multiple encodings for CSV files that aren't UTF-8
+                df = None
+                encodings_to_try = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+                
+                for encoding in encodings_to_try:
+                    try:
+                        df = pd.read_csv(temp_path, encoding=encoding)
+                        break  # Success!
+                    except UnicodeDecodeError:
+                        continue
+                
+                if df is None:
+                    from core.logger import logger
+                    logger.error(f"Could not decode CSV file {temp_path} with any supported encoding")
+                    return None
+                    
                 cols = df.columns.tolist()
             except Exception as e:
+                from core.logger import logger
+                logger.error(f"Failed to read CSV file {temp_path}: {e}")
                 # If CSV is corrupt or some other error
                 return None
 
@@ -81,9 +98,9 @@ class SessionManager:
             msg_result = await session.exec(msg_stmt)
             messages_db = msg_result.all()
 
-            # 4. Initialize Agent
+            # 4. Initialize Agent with session_id for artifact scoping
             system_prompt = format_system_prompt(cols)
-            agent = CSVAgent(system_prompt=system_prompt, context={"df": df})
+            agent = CSVAgent(system_prompt=system_prompt, context={"df": df}, session_id=conversation_id)
             
             # 5. Replay history into agent
             # We skip the system prompt as it's already added in __init__

@@ -1,5 +1,7 @@
 import json
 import asyncio
+import os
+import shutil
 from typing import List, Dict, Any, Optional, AsyncGenerator
 import traceback
 from datetime import datetime
@@ -13,10 +15,11 @@ from core.logger import logger
 from core.ratelimit import limiter, RateLimitExceeded
 
 class CSVAgent:
-    def __init__(self, system_prompt: str = "", context: Dict[str, Any] = None):
+    def __init__(self, system_prompt: str = "", context: Dict[str, Any] = None, session_id: str = None):
         self.client = get_client()
         self.messages: List[Dict[str, Any]] = []
         self.context = context or {}
+        self.session_id = session_id  # Required for artifact scoping
         if system_prompt:
             self.messages.append({"role": "system", "content": system_prompt})
 
@@ -26,13 +29,14 @@ class CSVAgent:
     async def run(self) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Runs the agent loop and yields partial responses or tool outputs.
-        Yields dict: {"type": "delta"|"status"|"error", "content": str}
+        Yields dict: {"type": "delta"|"status"|"error"|"artifact"|"tool_code"|"tool_output", "content": str}
         """
+        # Import artifact service here to avoid circular imports
+        from backend.core.artifacts import artifact_service
+        
         steps = 0
         while steps < settings.MAX_STEPS:
             try:
-                # synchronous limiter for now, or make it async if needed. 
-                # Assuming limiter.acquire() is fast enough or we leave it sync.
                 limiter.acquire() 
             except RateLimitExceeded as e:
                 logger.warning("Rate limit exceeded")
@@ -108,9 +112,6 @@ class CSVAgent:
                     args_str = tool_call_data["function"]["arguments"]
                     logger.info(f"Tool Call: {func_name} args={args_str}")
 
-                    # yield {"type": "status", "content": "Running code..."} 
-
-
                     if func_name == "run_code_capture":
                         try:
                             args = json.loads(args_str)
@@ -119,131 +120,90 @@ class CSVAgent:
                             # Yield code first
                             yield {"type": "tool_code", "content": code_to_run}
 
-                            # Run code execution in a separate thread to avoid blocking loop
-                            # Since run_code_capture uses exec()
+                            # Run code execution in a separate thread
                             result: ToolResult = await asyncio.to_thread(
                                 run_code_capture, 
                                 code_to_run, 
                                 initial_locals=self.context
                             )
                             
-                            logger.debug(f"Tool Output: {result.stdout[:100]}...")
-                            
-                            # Message append deferred until after artifact processing to include summaries
+                            logger.debug(f"Tool Output: {result.stdout[:100] if result.stdout else '(empty)'}...")
                             
                             if result.error:
                                 yield {"type": "tool_output", "content": f"Error: {result.error}"}
                             else:
-                                # Process Artifacts
+                                # Process Artifacts using the new service
                                 artifact_msg = ""
-                                if result.artifacts:
-                                    from backend.core.storage import storage
-                                    import uuid
-                                    import os
-                                    
-                                    for artifact_path in result.artifacts:
+                                artifacts_to_cleanup = []
+                                
+                                for artifact_path in result.artifacts:
+                                    logger.info(f"[ARTIFACT LIFECYCLE] Processing artifact: {artifact_path}")
+                                    try:
                                         filename = os.path.basename(artifact_path)
-                                        unique_name = f"artifact_{uuid.uuid4()}_{filename}"
+                                        conversation_id = self.session_id or "default"
+                                        logger.info(f"[ARTIFACT LIFECYCLE] Filename={filename}, conversation_id={conversation_id}")
                                         
-                                        # Upload
-                                        with open(artifact_path, "rb") as f:
-                                            storage.upload_file(f, unique_name)
+                                        # Save to permanent storage
+                                        logger.info(f"[ARTIFACT LIFECYCLE] Saving artifact to permanent storage...")
+                                        key = artifact_service.save_artifact(artifact_path, conversation_id)
+                                        logger.info(f"[ARTIFACT LIFECYCLE] Artifact saved with key: {key}")
+                                        url = artifact_service.get_artifact_url(key)
+                                        logger.info(f"[ARTIFACT LIFECYCLE] Artifact URL: {url}")
+                                        artifacts_to_cleanup.append(artifact_path)
                                         
-                                        url = f"/api/files/{unique_name}"
+                                        # Generate appropriate markdown based on file type
                                         if filename.endswith(".png"):
                                             md = f"\n![Generated Plot]({url})\n"
+                                            logger.info(f"[ARTIFACT LIFECYCLE] Generated PNG artifact markdown: {md}")
+                                            logger.info(f"[ARTIFACT LIFECYCLE] Yielding PNG artifact event")
                                             yield {"type": "artifact", "content": md}
+                                            logger.info(f"[ARTIFACT LIFECYCLE] PNG artifact event yielded")
                                             artifact_msg += f"\n[Generated File: {filename}]"
+                                            
                                         elif filename.endswith(".html"):
-                                            # Render iframe for interactive plots
-                                            # Use a generic div with data attribute to avoid iframe stripping by markdown parsers
                                             md = f'\n<div class="interactive-plot" data-src="{url}" style="width:100%; height:600px;"></div>\n\n<a href="{url}" target="_blank" rel="noopener noreferrer">Open Full Report</a>\n'
-                                            logger.info(f"Generated HTML Artifact: {md}")
+                                            logger.info(f"[ARTIFACT LIFECYCLE] Generated HTML artifact markdown (length={len(md)}): {md[:200]}...")
+                                            logger.info(f"[ARTIFACT LIFECYCLE] Yielding HTML artifact event")
                                             yield {"type": "artifact", "content": md}
+                                            logger.info(f"[ARTIFACT LIFECYCLE] HTML artifact event yielded successfully")
                                             artifact_msg += f"\n[Generated File: {filename}]"
+                                            
                                         elif filename.endswith(".json"):
                                             # Read JSON for LLM context
                                             try:
                                                 with open(artifact_path, "r") as f:
                                                     data = json.load(f)
-                                                    
-                                                    # Smart extraction for YData Profiling
-                                                    summary = []
-                                                    summary.append(f"### detailed YData Profiling Report for {filename}")
-                                                    
-                                                    # 1. Alerts (CRITICAL)
-                                                    alerts = data.get("alerts", [])
-                                                    if alerts:
-                                                        summary.append("\n#### 🚨 Alerts (High Priority)")
-                                                        for alert in alerts:
-                                                            summary.append(f"- {alert}")
-                                                    else:
-                                                        summary.append("\n#### Alerts: None found.")
-                                                    
-                                                    # 2. Variables Statistics (Detailed)
-                                                    summary.append("\n#### 📊 Variables Statistics")
-                                                    variables = data.get("variables", {})
-                                                    for var_name, stats in variables.items():
-                                                        var_type = stats.get("type", "Unknown")
-                                                        n_missing = stats.get("n_missing", 0)
-                                                        p_missing = stats.get("p_missing", 0)
-                                                        
-                                                        # Basic info
-                                                        var_info = [f"**{var_name}** ({var_type})"]
-                                                        var_info.append(f"Missing: {n_missing} ({p_missing:.1%})")
-                                                        
-                                                        if var_type == "Numeric":
-                                                            # Numeric Stats
-                                                            mean = stats.get("mean")
-                                                            std = stats.get("std")
-                                                            min_val = stats.get("min")
-                                                            max_val = stats.get("max")
-                                                            skew = stats.get("skewness")
-                                                            kurtosis = stats.get("kurtosis")
-                                                            
-                                                            if mean is not None: var_info.append(f"Mean: {mean:.4f}")
-                                                            if std is not None: var_info.append(f"Std: {std:.4f}")
-                                                            if min_val is not None: var_info.append(f"Min: {min_val}")
-                                                            if max_val is not None: var_info.append(f"Max: {max_val}")
-                                                            if skew is not None: var_info.append(f"Skewness: {skew:.4f}")
-                                                            if kurtosis is not None: var_info.append(f"Kurtosis: {kurtosis:.4f}")
-                                                            
-                                                        elif var_type == "Categorical":
-                                                            # Categorical Stats
-                                                            n_unique = stats.get("n_unique")
-                                                            if n_unique is not None: var_info.append(f"Unique: {n_unique}")
-                                                            
-                                                        elif var_type == "Boolean":
-                                                            count = stats.get("count")
-                                                            var_info.append(f"Count: {count}")
-
-                                                        summary.append("- " + ", ".join(var_info))
-                                                    
-                                                    # 3. Correlations
-                                                    # Dump high correlation warnings if in alerts, but explicitly mentioning availability
-                                                    correlations = data.get("correlations", {})
-                                                    if correlations:
-                                                        summary.append(f"\n#### 🔗 Correlations Available: {', '.join(correlations.keys())}")
-                                                        summary.append("(Refer to Alerts for significant high correlations)")
-
-                                                    summary_text = "\n".join(summary)
-
-                                                    # Increase Limit significantly
-                                                    if len(summary_text) > 50000:
-                                                        summary_text = summary_text[:50000] + "... (truncated)"
-                                                    
-                                                    result.stdout += f"\n\n[System] PROFILING REPORT SUMMARY:\n{summary_text}\n"
+                                                    summary = self._extract_json_summary(data, filename)
+                                                    if summary:
+                                                        result.stdout += f"\n\n[System] PROFILING REPORT SUMMARY:\n{summary}\n"
                                             except Exception as e:
                                                 logger.error(f"Failed to read JSON artifact: {e}")
+                                        else:
+                                            # Generic file - just note it was created
+                                            artifact_msg += f"\n[Generated File: {filename}]"
+                                            
+                                    except Exception as e:
+                                        logger.error(f"Failed to process artifact {artifact_path}: {e}")
+                                
+                                # Cleanup temp artifact files after upload
+                                for path in artifacts_to_cleanup:
+                                    try:
+                                        os.remove(path)
+                                        # Also try to remove the parent temp directory if empty
+                                        parent = os.path.dirname(path)
+                                        if parent and os.path.isdir(parent) and not os.listdir(parent):
+                                            os.rmdir(parent)
+                                    except Exception:
+                                        pass
 
-                                self.messages.append({
-                                    "role": "tool",
-                                    "tool_call_id": tool_call_data["id"],
-                                    "name": "run_code_capture",
-                                    "content": json.dumps(result.model_dump())
-                                })
+                            self.messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call_data["id"],
+                                "name": "run_code_capture",
+                                "content": json.dumps(result.model_dump())
+                            })
 
-                                yield {"type": "tool_output", "content": result.stdout + artifact_msg}
+                            yield {"type": "tool_output", "content": result.stdout + artifact_msg}
                                 
                         except Exception as e:
                             logger.error(f"Tool Execution Error: {e}", exc_info=True)
@@ -260,3 +220,58 @@ class CSVAgent:
                  return
         
         yield {"type": "status", "content": "Max steps reached without final answer."}
+
+    def _extract_json_summary(self, data: dict, filename: str) -> str:
+        """Extract a summary from JSON data (e.g., YData Profiling report)."""
+        summary = []
+        summary.append(f"### Detailed YData Profiling Report for {filename}")
+        
+        # 1. Alerts (CRITICAL)
+        alerts = data.get("alerts", [])
+        if alerts:
+            summary.append("\n#### 🚨 Alerts (High Priority)")
+            for alert in alerts:
+                summary.append(f"- {alert}")
+        else:
+            summary.append("\n#### Alerts: None found.")
+        
+        # 2. Variables Statistics
+        summary.append("\n#### 📊 Variables Statistics")
+        variables = data.get("variables", {})
+        for var_name, stats in variables.items():
+            var_type = stats.get("type", "Unknown")
+            n_missing = stats.get("n_missing", 0)
+            p_missing = stats.get("p_missing", 0)
+            
+            var_info = [f"**{var_name}** ({var_type})"]
+            var_info.append(f"Missing: {n_missing} ({p_missing:.1%})")
+            
+            if var_type == "Numeric":
+                for stat in ["mean", "std", "min", "max", "skewness", "kurtosis"]:
+                    val = stats.get(stat)
+                    if val is not None:
+                        var_info.append(f"{stat.capitalize()}: {val:.4f}")
+            elif var_type == "Categorical":
+                n_unique = stats.get("n_unique")
+                if n_unique is not None:
+                    var_info.append(f"Unique: {n_unique}")
+            elif var_type == "Boolean":
+                count = stats.get("count")
+                if count is not None:
+                    var_info.append(f"Count: {count}")
+
+            summary.append("- " + ", ".join(var_info))
+        
+        # 3. Correlations
+        correlations = data.get("correlations", {})
+        if correlations:
+            summary.append(f"\n#### 🔗 Correlations Available: {', '.join(correlations.keys())}")
+            summary.append("(Refer to Alerts for significant high correlations)")
+
+        summary_text = "\n".join(summary)
+        
+        # Truncate if too long
+        if len(summary_text) > 50000:
+            summary_text = summary_text[:50000] + "... (truncated)"
+        
+        return summary_text

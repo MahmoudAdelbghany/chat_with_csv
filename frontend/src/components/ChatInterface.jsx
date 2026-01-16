@@ -9,29 +9,14 @@ const CustomImg = ({node, ...props}) => (
 
 const CustomDiv = ({node, ...props}) => {
     if (props.className === 'interactive-plot' && props['data-src']) {
-        const API_URL = import.meta.env.VITE_API_URL || '/api';
+        const API_URL = import.meta.env.VITE_API_URL || '';
         let src = props['data-src'];
         
-        // Prepend API_URL if src is relative
-        if (src && !src.startsWith('http')) {
-             if (src.startsWith('/')) {
-                 // Check if API_URL has /api suffix and src starts with it?
-                 // No, API_URL usually is http://host or http://host/api
-                 // src usually is /api/files/...
-                 // If API_URL is /api (proxy), then we might get double api if src is /api/files
-                 
-                 if (API_URL.startsWith('http')) {
-                      const baseUrl = API_URL.endsWith('/api') ? API_URL.slice(0, -4) : API_URL;
-                      src = `${baseUrl}${src}`;
-                 } else {
-                     // Local dev with proxy or relative path
-                     // If API_URL is just '/api', and src is '/api/files', just leave it?
-                     // If src is '/api/files', we assume it's absolute path from root.
-                     // But if we are on a different domain?
-                     // Wait, if API_URL is http://... we MUST prepend.
-                     // If API_URL is relative (e.g. /api), then src /api/files... is fine relative to current origin.
-                 }
-            }
+        // Prepend API base URL if configured (for production deployments)
+        if (API_URL && API_URL.startsWith('http') && src.startsWith('/api/')) {
+            // Remove /api suffix from API_URL if present to avoid duplication
+            const baseUrl = API_URL.endsWith('/api') ? API_URL.slice(0, -4) : API_URL;
+            src = `${baseUrl}${src}`;
         }
 
         return (
@@ -165,6 +150,9 @@ const ChatInterface = ({ sessionId, initialData }) => {
                     const data = JSON.parse(line);
                     
                     if (data.type === 'delta') {
+                        assistantMsg.content += data.content;
+                    } else if (data.type === 'artifact') {
+                        // Append artifact HTML (images, interactive plots, etc.)
                         assistantMsg.content += data.content;
                     } else if (data.type === 'status' || data.type === 'error') {
                         if (data.content.startsWith("Code Output")) {

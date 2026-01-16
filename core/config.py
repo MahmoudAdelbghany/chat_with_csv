@@ -18,5 +18,6 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        extra = "ignore"  # Allow extra env vars like langfuse_*
 
 settings = Settings()

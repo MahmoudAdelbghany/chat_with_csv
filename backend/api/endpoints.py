@@ -65,7 +65,28 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_u
         temp_preview_path = f"/tmp/{unique_filename}"
         storage.download_file(stored_path, temp_preview_path)
         
-        df = pd.read_csv(temp_preview_path)
+        # Try multiple encodings for CSV files that aren't UTF-8
+        df = None
+        encodings_to_try = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+        last_error = None
+        
+        for encoding in encodings_to_try:
+            try:
+                df = pd.read_csv(temp_preview_path, encoding=encoding)
+                break  # Success!
+            except UnicodeDecodeError as e:
+                last_error = e
+                continue
+        
+        if df is None:
+            # Clean up temp file before raising
+            if os.path.exists(temp_preview_path):
+                os.remove(temp_preview_path)
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Could not decode CSV file with any supported encoding. Please ensure the file is properly encoded (UTF-8 recommended)."
+            )
+        
         cols = df.columns.tolist()
         preview_data = df.head().to_dict(orient='records')
         
@@ -83,7 +104,11 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Depends(get_u
             "preview": preview_data
         })
         
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
+        from core.logger import logger
+        logger.error(f"Failed to process uploaded file: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")
 
 @router.post("/chat/{session_id}")
@@ -129,9 +154,15 @@ async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get
                     # We used to close details here.
                     # Important: Artifact content might contain HTML (iframe).
                     # We must ensure we are closing the PREVIOUS details block (Executing Code).
+                    from core.logger import logger
+                    logger.info(f"[ARTIFACT LIFECYCLE] Endpoint received artifact event: type={part['type']}")
+                    logger.info(f"[ARTIFACT LIFECYCLE] Artifact content (first 300 chars): {part['content'][:300] if part['content'] else 'EMPTY'}")
                     artifact_html = f"\n</details>\n\n{part['content']}\n\n<details><summary>Execution Output</summary>\n"
+                    logger.info(f"[ARTIFACT LIFECYCLE] Generated artifact_html (first 300 chars): {artifact_html[:300]}")
                     full_response += artifact_html
+                    logger.info(f"[ARTIFACT LIFECYCLE] Yielding artifact delta to client (length={len(artifact_html)})")
                     yield json.dumps({"type": "delta", "content": artifact_html}) + "\n"
+                    logger.info(f"[ARTIFACT LIFECYCLE] Artifact delta yielded to client successfully")
                 elif part["type"] == "tool_output":
                     output_html = f"\n**Output:**\n\n```\n{part['content']}\n```\n\n</details>\n"
                     full_response += output_html
@@ -189,32 +220,70 @@ async def delete_conversation(session_id: str, user_id: str = Depends(get_user_i
     await session_manager.delete_conversation(session_id, user_id)
     return {"status": "success", "message": "Conversation deleted"}
 
-@router.get("/files/{filename}")
-async def get_file(filename: str, user_id: str = Depends(get_user_id)):
+@router.get("/artifacts/{key:path}")
+async def get_artifact(key: str, user_id: str = Depends(get_user_id)):
     """
-    Serve files (plots, reports) from storage.
+    Stream artifact content directly from storage.
+    
+    Key format: artifacts/{conversation_id}/{unique_id}_{filename}
     """
+    from backend.core.artifacts import artifact_service
+    from core.logger import logger
+    
+    logger.info(f"[ARTIFACT LIFECYCLE] GET /api/artifacts/{key} requested")
+    
+    # Security check: prevent directory traversal
+    if ".." in key:
+        logger.warning(f"[ARTIFACT LIFECYCLE] Rejected request with directory traversal: {key}")
+        raise HTTPException(status_code=400, detail="Invalid artifact key")
+    
     try:
-        # Create a temp location
-        temp_path = f"/tmp/{filename}"
-        # If running locally, storage might just point to a path, but let's re-use download interface for abstraction
-        # Ideally storage should have a get_file_stream or presigned url method.
-        # For now, download to temp and stream.
+        media_type = artifact_service.get_media_type(key)
+        logger.info(f"[ARTIFACT LIFECYCLE] Determined media type: {media_type}")
+        logger.info(f"[ARTIFACT LIFECYCLE] Streaming artifact to client...")
         
-        # Security check: prevent directory traversal
-        if ".." in filename or "/" in filename:
-             raise HTTPException(status_code=400, detail="Invalid filename")
-             
+        return StreamingResponse(
+            artifact_service.stream_artifact(key),
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f"inline; filename=\"{key.split('/')[-1]}\"",
+                "Cache-Control": "public, max-age=86400"  # Cache for 24 hours
+            }
+        )
+    except FileNotFoundError:
+        logger.error(f"[ARTIFACT LIFECYCLE] Artifact not found: {key}")
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    except Exception as e:
+        logger.error(f"[ARTIFACT LIFECYCLE] Error streaming artifact {key}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve artifact")
+
+
+# Legacy endpoint for backwards compatibility - redirects to new endpoint
+@router.get("/files/{filename}")
+async def get_file_legacy(filename: str, user_id: str = Depends(get_user_id)):
+    """
+    Legacy endpoint that redirects to the new artifact endpoint.
+    Kept for backwards compatibility with old chat history.
+    """
+    from fastapi.responses import RedirectResponse
+    
+    # Security check
+    if ".." in filename or "/" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Try to find the artifact in storage (old format didn't have conversation scoping)
+    # For legacy artifacts, we check the uploads directory directly
+    from backend.core.storage import storage
+    
+    try:
+        temp_path = f"/tmp/{filename}"
         storage.download_file(filename, temp_path)
         
-        # Determine media type
         media_type = "application/octet-stream"
         if filename.endswith(".png"): media_type = "image/png"
         elif filename.endswith(".html"): media_type = "text/html"
         elif filename.endswith(".json"): media_type = "application/json"
         
         return FileResponse(temp_path, media_type=media_type, filename=filename, content_disposition_type="inline")
-        
-    except Exception as e:
-        # If file not found
+    except Exception:
         raise HTTPException(status_code=404, detail="File not found")
