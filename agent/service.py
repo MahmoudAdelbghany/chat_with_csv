@@ -129,11 +129,13 @@ class CSVAgent:
                             
                             logger.debug(f"Tool Output: {result.stdout[:100] if result.stdout else '(empty)'}...")
                             
+                            # Initialize artifact_msg outside the conditional to avoid reference errors
+                            artifact_msg = ""
+                            
                             if result.error:
                                 yield {"type": "tool_output", "content": f"Error: {result.error}"}
                             else:
                                 # Process Artifacts using the new service
-                                artifact_msg = ""
                                 artifacts_to_cleanup = []
                                 
                                 for artifact_path in result.artifacts:

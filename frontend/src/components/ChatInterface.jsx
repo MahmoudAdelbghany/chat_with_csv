@@ -3,9 +3,20 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { Send, User, Bot } from 'lucide-react';
 
-const CustomImg = ({node, ...props}) => (
-    <img {...props} style={{maxWidth: '100%', borderRadius: '8px', marginTop: '10px'}} crossOrigin="anonymous" alt={props.alt || "Generated Image"} />
-);
+const CustomImg = ({node, ...props}) => {
+    const API_URL = import.meta.env.VITE_API_URL || '';
+    let src = props.src;
+    
+    // Transform /api/ paths for production deployments
+    if (src && API_URL && API_URL.startsWith('http') && src.startsWith('/api/')) {
+        const baseUrl = API_URL.endsWith('/api') ? API_URL.slice(0, -4) : API_URL;
+        src = `${baseUrl}${src}`;
+    }
+    
+    return (
+        <img {...props} src={src} style={{maxWidth: '100%', borderRadius: '8px', marginTop: '10px'}} crossOrigin="anonymous" alt={props.alt || "Generated Image"} />
+    );
+};
 
 const CustomDiv = ({node, ...props}) => {
     if (props.className === 'interactive-plot' && props['data-src']) {
@@ -38,15 +49,11 @@ const markdownComponents = {
         let href = props.href;
         
         if (href && !href.startsWith('http') && !href.startsWith('#')) {
-             if (href.startsWith('/api/files/')) {
-                 // Handle agent-generated paths like /api/files/...
+             // Handle all /api/ paths (files, artifacts, etc.)
+             if (href.startsWith('/api/')) {
                  if (API_URL.startsWith('http')) {
                       // Avoid double /api if API_URL includes it
                       const baseUrl = API_URL.endsWith('/api') ? API_URL.slice(0, -4) : API_URL;
-                      // Remove leading slash from href to ensure clean join? 
-                      // Actually baseUrl + href (which starts with /) is fine e.g. domain.com + /api/files
-                      // Just need to ensure no double slash if baseUrl ends with / (it shouldn't if strict)
-                      // But API_URL usually doesn't end with slash.
                       href = `${baseUrl}${href}`;
                  }
              } else if (!href.startsWith('/')) {
